@@ -11,4 +11,4 @@ Le projet consiste à développer une application pour la planification d'un tra
 3. Service REST de cartographie pour afficher le trajet; 
 4. Service en GraphQL qui fournit la liste des véhicules avec leur caractéristiques.
 
-### Fonctionnement du Porjet 
+Le Front est deployé sur Vercel : https://volt-voyage.vercel.app/
