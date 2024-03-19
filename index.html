@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>VoltVoyage</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+
+    <style>
+        * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* Body style */
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f0f0;
+        color: #333;
+        padding: 20px;
+    }
+
+    /* Header style */
+    h1 {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    h2 {
+        margin: 20px;
+    }
+
+    /* Form style */
+    #dashboard {
+        margin-top: 20px;
+        display: flex;
+    }
+
+    .resume {
+        margin : 0 auto;
+    }
+
+    form {
+        width: 45%;
+    }
+
+    form label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+
+    form input[type="text"] {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+
+    form button[type="submit"] {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+        margin-bottom: 20px;
+    }
+
+    form button[type="submit"]:hover {
+        background-color: #45a049;
+    }
+
+    /* Result style */
+    #result {
+        margin-top: 20px;
+    }
+
+    /* Map style */
+    #map {
+        height: 500px;
+        width: 900px;
+        display : felx;
+        margin : 0 auto;
+    }
+
+    /* Voiture style */
+    #resultat {
+        margin-top: 20px;
+    }
+
+    #resultat label {
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    #resultat select {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+
+    /* Footer style */
+    footer {
+        margin-top: 50px;
+        text-align: center;
+        color: #666;
+    }
+    </style>
+</head>
+
+<script>
+     function getTempsTrajet(){
+        fetch('/temps_trajet')
+            .then(response => response.text())
+            .then(data => {
+                console.log('Response from server:', data);
+                document.getElementById('result').innerText = data;
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }
+
+    function getVilleDepart(){
+        let mesCoordonnees = [];
+        event.preventDefault();
+        var villeDepart = document.getElementsByName("villeDepart")[0].value;
+        var villeArrivee = document.getElementsByName("villeArrivee")[0].value;
+        document.getElementById('startCountry').innerText = villeDepart;
+        document.getElementById('endCountry').innerText = villeArrivee;
+
+        // Récupération de l'itinéraire 
+        fetch('/calculer-itineraire', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'depart=' + encodeURIComponent(villeDepart) + '&arrivee=' + encodeURIComponent(villeArrivee),
+                })
+                .then(response => response.json())
+                .then(info => {
+                    console.log("info : ",info);
+                    geoPoint = info.infoIti.geometry.coordinates
+                    mesCoordonnees = europeCoords(geoPoint);
+                    //clean map
+                    map.eachLayer(function (layer) {
+                        map.removeLayer(layer);
+                    });
+                    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    }).addTo(map);
+                    var marker = L.marker([mesCoordonnees[0][0], mesCoordonnees[0][1]]).addTo(map);
+                    var marker2 = L.marker([mesCoordonnees[mesCoordonnees.length-1][0], mesCoordonnees[mesCoordonnees.length-1][1]]).addTo(map);
+                    var polyline = L.polyline(mesCoordonnees, {color: 'red'}).addTo(map);
+                    //for(var i = 0 ; i < info.bornesProche.length ; i+= info.bornesProche.length/10){
+                    for(borne of info.bornesProche){
+                        // console.log(borne);
+                        L.marker([borne.borneU.ylatitude, borne.borneU.xlongitude]).addTo(map)
+                            .bindPopup(borne.borneU.ad_station + '<br> Distance : ' + Math.round(borne.distance)+' km')
+                            .openPopup();
+                        // console.log(borne);
+                    }
+                    document.getElementById('distance').innerText = Math.round(info.infoIti.properties.summary.distance/1000);
+                    document.getElementById('time').innerText = Math.round(info.infoIti.properties.summary.duration/60);
+                    document.getElementById('charge').innerText = info.time_trip;
+                })
+                .catch(error => {
+                    console.error('Erreur lors de la récupération des données:', error);
+                });
+    }
+    function getBornes(){
+        fetch('/bornesData')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Response from server:', data);
+                for(var i = 0; i < data.length; i++){
+                    const p = document.createElement('p');
+                    p.innerText = data[i].name + " - " + data[i].address;
+                    document.getElementById('dashboard').appendChild(p);
+                }
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }
+</script>
+
+<body>
+     <h1>VoltVoyage</h1>
+    <h2>Calcul d'itinéraire</h2>
+    <div id="dashboard">
+    
+    <form id="itineraireForm">
+        <label for="depart">Départ:</label>
+        <input id="depart" type="text" name="villeDepart" required>
+
+        <label for="arrivee">Arrivée:</label>
+        <input id="arrivee" type="text" name="villeArrivee" required>
+
+        <button type="submit" onclick="getVilleDepart()">Calculer l'itinéraire</button>
+    </form>
+    <div class="resume">
+        <p>Distance : </b> <span id="distance"> </span> km</p>
+        <p><b>Ville de départ : </b> <span id="startCountry"> </span></p>
+        <p><b>Ville d'arrivée : </b> <span id="endCountry"> </span></p>
+        <p>Temps : <span id="time">   </span> min</p>
+        <p>Nombre de minute de charge : <span id="charge"> </span></p>
+    </div>
+</div>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([46.939415, 5.877720], 13);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    }).addTo(map);  
+        
+        function europeCoords(latlngs) {
+            var coords = [];
+            for (var i = 0; i < latlngs.length; i++) {
+                coords.push([latlngs[i][1], latlngs[i][0]]);
+            }
+            return coords;
+        }
+    </script>
+
+    <h2>Trouver voiture</h2>
+    <!-- <form action="/recuperer-modeles-voitures" method="post">
+        <button type="submit">Trouver voiture</button>
+    </form> -->
+    <div id="resultat">
+        <label for="marque">Marque de voiture :</label>
+        <select name="marque" onclick="getVehicule()">
+            <!-- Toutes les voitures de vehicuList -->
+        </select>
+        <p id="vehicule"></p>
+        <script>
+            const selectElement = document.querySelector('select');
+            selectElement.addEventListener('change', function() {
+                // Récupération de la valeur sélectionnée
+                const selectedValue = this.value;
+                
+                // Utilisation de la valeur sélectionnée comme nécessaire
+                console.log('Valeur sélectionnée :', selectedValue.toString());
+            });
+            function getVehicule(){
+                fetch('/recuperer-modeles-voitures')
+                    .then(response => response.json())
+                    .then(data => {
+                        //console.log('Response from server:', data.vehicleList[0].naming.make);
+                        console.log('Response from server:', data.vehicleList[0]);
+                        for(var i = 0; i < data.vehicleList.length; i++){
+                            const option = document.createElement('option');
+                            option.value = data.vehicleList[i];
+                            option.text = data.vehicleList[i].naming.make + " - " + data.vehicleList[i].naming.model + " - " + data.vehicleList[i].naming.version;
+                            document.querySelector('select').appendChild(option);
+                            // document.getElementById('charge').innerText = ;
+                            
+                        }
+                    })
+                    .catch(error => console.error('Error fetching data:', error));
+                return data.vehicleList;
+            }
+        </script>
+    </div>
+</body>
+</html>
